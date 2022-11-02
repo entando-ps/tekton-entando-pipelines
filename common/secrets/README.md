@@ -1,4 +1,4 @@
-# Generate secrets to pushing to external registry
+### Generate secrets to pushing to external registry
 
 Set the required env vars to simplify the process:
 
