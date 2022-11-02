@@ -10,7 +10,7 @@
 
 ## Prerequisites
 
-- To be able to install these Tekton resources you need to be a member of the Cluster-Admin role.
+- In order to install these Tekton resources you need to be a member of the Cluster-Admin role.
 - OCP 4.8 with Openshift Pipelines (1.52) already installed and configured
 - Access to your API OCP cluster to execute commands with `oc`
 - An instance of Entando 7.x already installed to the target namespace
@@ -23,7 +23,7 @@
 
 ### Required steps
 
-1. Clone this repostitory (https://github.com/entando-ps/tekton-entando-pipelines.git)
+1. Clone this repository (https://github.com/entando-ps/tekton-entando-pipelines.git)
 2. Edit the `build-bot` secret, located at `./common/secrets` directory to match with your VCS's credentials
 3. Edit the `container-registry-secret`, located at `./common/secrets` directory to match with your docker registry's credentials
 4. Edit the `build-bot` service account, located at `./common/serviceaccounts` directory to match with your target namespace
@@ -54,9 +54,9 @@ configure Tekton Triggers (https://tekton.dev/docs/triggers/).
 
 In this repository you can find an example done with Gitlab inside the `./triggers` directory.
 
-## Execute the firs pipeline
+## Execute the first pipeline
 
-In this repo you can find a working `pipelinerun` example with all the needed parameters. The pipelinerun is located
+In this repo you can find a working `pipelinerun` example with all the required parameters. The pipelinerun is located
 at `./pipelineruns` directory and is listed here:
 
 ```yaml
@@ -98,7 +98,7 @@ spec:
 1. `ENTANDO_APP_NAME` parameter is needed to tell `ent` which is the Entando App name to point to retrieve the Keycloak token from.
 2. `REPO_URL` is the Bundle's repository which needs to be <u>specified in the SSH form</u>.
 3. `SUBDIR_PATH` parameter is used to download the bundle's repository under a specific directory. In this case `simple-bundle`.
-4. `BRANCH_NAME` is the branch bundle name to download the code from.
+4. `BRANCH_NAME` is the branch bundle name from which the code can be downloaded.
 5. `CLEAN_WORKSPACE` parameter is used to delete the previous download code and needs to be set to `true`.
 6. `TLSVERIFY` parameter is used when you are using a self-signed TLS certificate.
 7. `CONTEXT_DIR` parameter needs to match with the `subdir_path`. Is the path from where the commands will be executed.
@@ -107,7 +107,7 @@ spec:
 
 ## Notes
 
-### Generate secrets to pushing to external registry
+### Generate secrets for pushing to external registry
 
 Set the required env vars to simplify the process:
 
