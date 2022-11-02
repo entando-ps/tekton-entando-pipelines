@@ -22,9 +22,6 @@ spec:
       type: string
       description: Clean out the contents of the destination directory if it already exists before cloning.
       default: "true"
-    - name: MF_IMAGE
-      description: The fully qualified image name to build
-      default: registry-docker-registry.kube-system:5000/ilpatto-microservice:$(ClusterTasks.retrieve-version.results.version)
     - name: DOCKERFILE
       description: The path of the Dockerfile.
       default: ./Dockerfile
