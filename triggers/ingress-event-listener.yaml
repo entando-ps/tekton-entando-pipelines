@@ -1,0 +1,23 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: el-gitlab
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+spec:
+  rules:
+    - host: [your-ingress-uri]
+      http:
+        paths:
+          - path: /99f8c806ee87fa679ce695ffd9e59f95
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: el-gitlab-event-listener
+                port:
+                  number: 8080
+  tls:
+    - hosts:
+        - [your-ingress-uri]
+      secretName: sample-tls-secret

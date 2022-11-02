@@ -1,0 +1,61 @@
+apiVersion: triggers.tekton.dev/v1beta1
+kind: Trigger
+metadata:
+  name: simple-bundle-listener-trigger
+spec:
+  interceptors:
+    - name: "verify-gitlab-payload"
+      ref:
+        name: "gitlab"
+        kind: ClusterInterceptor
+      params:
+        - name: secretRef
+          value:
+            secretName: simple-bundle-webhook-secret
+            secretKey: secretToken
+        - name: eventTypes
+          value:
+            - "Push Hook"
+  bindings:
+    - ref: binding
+  template:
+    spec:
+      params:
+        - name: gitrevision
+        - name: gitrepositoryurl
+      resourcetemplates:
+        - apiVersion: tekton.dev/v1beta1
+          kind: PipelineRun
+          metadata:
+            generateName: simple-bundle-
+          spec:
+            serviceAccountName: build-bot
+            pipelineRef:
+              name: ent-bundle-project
+            params:
+              - name: ENTANDO_APP_NAME
+                value: "ent"
+              - name: REPO_URL
+                value: git@github.com:cecchisandrone/entando-codemotion-bundle.git
+              - name: SUBDIR_PATH
+                value: "simple-bundle"
+              - name: BRANCH_NAME
+                value: main
+              - name: CLEAN_WORKSPACE
+                value: "true"
+              - name: TLSVERIFY
+                value: "false"
+              - name: CONTEXT_DIR
+                value: "./simple-bundle"
+              - name: DOCKER_ORG
+                value: "p_masala"
+              - name: DOCKER_REGISTRY
+                value: "quay.io"
+            workspaces:
+              - name: source
+                persistentVolumeClaim:
+                  claimName: source-pvc
+              - name: local-maven-repo
+                persistentVolumeClaim:
+                  claimName: maven-repo-pvc
+

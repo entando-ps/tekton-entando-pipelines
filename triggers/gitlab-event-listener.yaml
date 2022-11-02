@@ -1,0 +1,11 @@
+apiVersion: triggers.tekton.dev/v1beta1
+kind: EventListener
+metadata:
+  name: gitlab-event-listener
+spec:
+  serviceAccountName: tekton-triggers-sa
+  triggers:
+    - triggerRef: simple-bundle-listener-trigger
+  resources:
+    kubernetesResource:
+      serviceType: ClusterIP

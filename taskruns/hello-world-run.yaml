@@ -1,0 +1,8 @@
+apiVersion: tekton.dev/v1beta1
+kind: TaskRun
+metadata:
+  name: hello-0-task-run
+spec:
+  taskRef:
+    kind: ClusterTask
+    name: hello
