@@ -18,7 +18,7 @@ spec:
     - name: ENT_IMAGE
       type: string
       description: The image providing the ent binary that this Task runs.
-      default: docker.io/entando/ent:7.1.1_ocp-4.8_k8s_1.21
+      default: docker.io/entando/ent:7.1.2_ocp-4.8_k8s_1.21
     - name: NAMESPACE
       type: string
       description: The namespace of the cluster where the bundle should be installed.
@@ -59,7 +59,7 @@ spec:
       image: $(params.ENT_IMAGE)
       workingDir: $(workspaces.source.path)/$(params.CONTEXT_DIR)
       command: ["/bin/bash"]
-      args: ["-c", "ent bundle pack --org=$(params.DOCKER_ORG)"]
+      args: ["-c", "ent bundle pack --org=$(params.DOCKER_ORG) --stdout"]
 #      securityContext:
 #        runAsNonRoot: true
 #        runAsUser: 65532
@@ -70,8 +70,8 @@ spec:
 #        runAsNonRoot: true
 #        runAsUser: 65532
       script: |
-        #!/usr/bin/env sh
-        set -eu
+        #!/usr/bin/env bash
+        set -eux
         
         BUNDLE_NAME="$(jq -r '.name' entando.json)"
         BUNDLE_NAME_EXIT_CODE="$?"
@@ -87,7 +87,7 @@ spec:
         fi
         printf "%s" "${BUNDLE_VERSION}" > "$(results.bundleVersion.path)"
 
-        MICROSERVICES_LIST="$(jq -r '.microservices[] | .name' entando.json)"
+        MICROSERVICES_LIST="$(jq -r '.microservices[] | .name' entando.json | tr '\n' ' ')"
         MICROSERVICES_LIST_EXIT_CODE="$?"
         if [ "${MICROSERVICES_LIST_EXIT_CODE}" != 0 ] ; then
           exit "${MICROSERVICES_LIST_EXIT_CODE}"
@@ -101,18 +101,37 @@ spec:
         fi
         printf "%s" "${MICROSERVICES_NUMBER}" > "$(results.microservicesNumber.path)"
         
-        MICROSERVICE_VERSION="$(mvn -f microservices/$MICROSERVICES_LIST/pom.xml help:evaluate -Dexpression=project.version -q -DforceStdout)"
-        MICROSERVICE_VERSION_EXIT_CODE="$?"
-        if [ "${MICROSERVICE_VERSION_EXIT_CODE}" != 0 ] ; then
-          exit "${MICROSERVICE_VERSION_EXIT_CODE}"
+        if [ "${MICROSERVICES_NUMBER}" -gt 1 ]; then
+          for ms in ${MICROSERVICES_LIST} ; do
+            MICROSERVICE_VERSION="$(mvn -f microservices/${ms}/pom.xml help:evaluate -Dexpression=project.version -q -DforceStdout)"
+            MICROSERVICE_VERSION_EXIT_CODE="$?"
+            if [ "${MICROSERVICE_VERSION_EXIT_CODE}" != 0 ] ; then
+              exit "${MICROSERVICE_VERSION_EXIT_CODE}"
+            fi
+            printf "%s" "${MICROSERVICE_VERSION}" > Ms-"${ms}"-Version ;
+          done
+          printf "%s" "${MICROSERVICE_VERSION}" > "$(results.microserviceVersion.path)"
+        else
+          MICROSERVICE_VERSION="$(mvn -f microservices/${MICROSERVICES_LIST}/pom.xml help:evaluate -Dexpression=project.version -q -DforceStdout)"
+          MICROSERVICE_VERSION_EXIT_CODE="$?"
+          if [ "${MICROSERVICE_VERSION_EXIT_CODE}" != 0 ] ; then
+            exit "${MICROSERVICE_VERSION_EXIT_CODE}"
+          fi
+          printf "%s" "${MICROSERVICE_VERSION}" > "$(results.microserviceVersion.path)"
         fi
-        printf "%s" "${MICROSERVICE_VERSION}" > "$(results.microserviceVersion.path)"
         
         echo "bundle name: `cat $(results.bundleName.path)`"
         echo "bundle version: `cat $(results.bundleVersion.path)`"
-        echo "microservice name: `cat $(results.microservicesList.path)`"
         echo "number of microservices to build: `cat $(results.microservicesNumber.path)`"
-        echo "microservice version: `cat $(results.microserviceVersion.path)`"
+        if [ "$MICROSERVICES_NUMBER" -gt 1 ] ; then
+          for ms in ${MICROSERVICES_LIST}; do
+            echo "microservice name: ${ms}"
+            echo "microservice ${ms} version: `cat Ms-${ms}-Version`";
+          done
+        else
+          echo "microservice name: `cat $(results.microservicesList.path)`"
+          echo "microservice version: `cat $(results.microserviceVersion.path)`"
+        fi
 
     - name: ent
       image: $(params.ENT_IMAGE)
