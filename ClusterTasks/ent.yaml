@@ -112,6 +112,7 @@ spec:
           done
           printf "%s" "${MICROSERVICE_VERSION}" > "$(results.microserviceVersion.path)"
         else
+          MICROSERVICES_LIST="$(jq -r '.microservices[] | .name' entando.json | tr '\n' ' ' | sed 's/[[:space:]]//g')"
           MICROSERVICE_VERSION="$(mvn -f microservices/${MICROSERVICES_LIST}/pom.xml help:evaluate -Dexpression=project.version -q -DforceStdout)"
           MICROSERVICE_VERSION_EXIT_CODE="$?"
           if [ "${MICROSERVICE_VERSION_EXIT_CODE}" != 0 ] ; then
