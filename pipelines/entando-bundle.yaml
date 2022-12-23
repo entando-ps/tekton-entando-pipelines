@@ -165,6 +165,7 @@ spec:
           value: $(params.ENTANDO_APP_NAME)
         - name: SCRIPT
           value: |
+            ent config --default --set ENTANDO_NAMESPACE $(params.NAMESPACE)
             ent bundle generate-cr -i $(params.DOCKER_REGISTRY)/$(params.DOCKER_ORG)/$(tasks.generate-manifests.results.bundleName) | kubectl apply -f -
             ent appname $(params.ENTANDO_APP_NAME) 
             ent config --default --set ENTANDO_CLI_DEFAULT_DOCKER_REGISTRY $(params.DOCKER_REGISTRY) 
@@ -192,6 +193,7 @@ spec:
           value: $(params.ENTANDO_APP_NAME)
         - name: SCRIPT
           value: |
+            ent config --default --set ENTANDO_NAMESPACE $(params.NAMESPACE)
             ent bundle generate-cr -i $(params.DOCKER_REGISTRY)/$(params.DOCKER_ORG)/$(tasks.generate-manifests.results.bundleName) | kubectl apply -f -
             ent appname $(params.ENTANDO_APP_NAME) 
             ent config --default --set ENTANDO_CLI_DEFAULT_DOCKER_REGISTRY $(params.DOCKER_REGISTRY) 
