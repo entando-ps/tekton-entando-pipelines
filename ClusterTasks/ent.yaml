@@ -1,5 +1,5 @@
 apiVersion: tekton.dev/v1beta1
-kind: ClusterTask
+kind: Task
 metadata:
   name: ent
 spec:
@@ -18,7 +18,7 @@ spec:
     - name: ENT_IMAGE
       type: string
       description: The image providing the ent binary that this Task runs.
-      default: docker.io/entando/ent:7.1.2_ocp-4.8_k8s_1.21
+      default: registry.hub.docker.com/entando/ent:7.1.2_ocp-4.8_k8s_1.21
     - name: NAMESPACE
       type: string
       description: The namespace of the cluster where the bundle should be installed.
@@ -57,18 +57,25 @@ spec:
   steps:
     - name: generate-manifests
       image: $(params.ENT_IMAGE)
+      resources:
+        limits:
+          cpu: '1'
+          memory: 2Gi
+        requests:
+          cpu: 200m
+          memory: 200Mi
       workingDir: $(workspaces.source.path)/$(params.CONTEXT_DIR)
       command: ["/bin/bash"]
       args: ["-c", "ent bundle pack --org=$(params.DOCKER_ORG) --stdout"]
-#      securityContext:
-#        runAsNonRoot: true
-#        runAsUser: 65532
+    #      securityContext:
+    #        runAsNonRoot: true
+    #        runAsUser: 65532
     - name: get-artifacts-and-data
       image: $(params.ENT_IMAGE)
       workingDir: $(workspaces.source.path)/$(params.CONTEXT_DIR)
-#      securityContext:
-#        runAsNonRoot: true
-#        runAsUser: 65532
+      #      securityContext:
+      #        runAsNonRoot: true
+      #        runAsUser: 65532
       script: |
         #!/usr/bin/env bash
         set -eux
@@ -87,7 +94,8 @@ spec:
         fi
         printf "%s" "${BUNDLE_VERSION}" > "$(results.bundleVersion.path)"
 
-        MICROSERVICES_LIST="$(jq -r '.microservices[] | .name' entando.json | tr '\n' ' ')"
+        MICROSERVICES_LIST="$(jq -r '.microservices[] | .name' entando.json | tr -d '\n')"
+
         MICROSERVICES_LIST_EXIT_CODE="$?"
         if [ "${MICROSERVICES_LIST_EXIT_CODE}" != 0 ] ; then
           exit "${MICROSERVICES_LIST_EXIT_CODE}"
@@ -95,6 +103,12 @@ spec:
         printf "%s" "${MICROSERVICES_LIST}" > "$(results.microservicesList.path)"
 
         MICROSERVICES_NUMBER="$(jq '.microservices | length' entando.json)"
+
+        if [ "${MICROSERVICES_NUMBER}" -gt 1 ]; then
+          MICROSERVICES_LIST="$(jq -r '.microservices[] | .name' entando.json | tr '\n' ' ')"
+          printf "%s" "${MICROSERVICES_LIST}" > "$(results.microservicesList.path)"
+        fi
+
         MICROSERVICES_NUMBER_EXIT_CODE="$?"
         if [ "${MICROSERVICES_NUMBER_EXIT_CODE}" != 0 ] ; then
           exit "${MICROSERVICES_NUMBER_EXIT_CODE}"
@@ -103,7 +117,7 @@ spec:
         
         if [ "${MICROSERVICES_NUMBER}" -gt 1 ]; then
           for ms in ${MICROSERVICES_LIST} ; do
-            MICROSERVICE_VERSION="$(mvn -f microservices/${ms}/pom.xml help:evaluate -Dexpression=project.version -q -DforceStdout)"
+            MICROSERVICE_VERSION="$(mvn -s microservices/settings.xml -Dmaven.wagon.http.ssl.insecure=true -Dmaven.wagon.http.ssl.allowall=true -Dmaven.wagon.http.ssl.ignore.validity.dates=true -f microservices/${ms}/pom.xml help:evaluate -Dexpression=project.version -q -DforceStdout)"
             MICROSERVICE_VERSION_EXIT_CODE="$?"
             if [ "${MICROSERVICE_VERSION_EXIT_CODE}" != 0 ] ; then
               exit "${MICROSERVICE_VERSION_EXIT_CODE}"
@@ -112,8 +126,8 @@ spec:
           done
           printf "%s" "${MICROSERVICE_VERSION}" > "$(results.microserviceVersion.path)"
         else
-          MICROSERVICES_LIST_LOCAL="$(jq -r '.microservices[] | .name' entando.json | tr '\n' ' ' | sed 's/[[:space:]]//g')"
-          MICROSERVICE_VERSION="$(mvn -f microservices/${MICROSERVICES_LIST_LOCAL}/pom.xml help:evaluate -Dexpression=project.version -q -DforceStdout)"
+          MICROSERVICES_LIST_LOCAL="$(jq -r '.microservices[] | .name' entando.json | tr -d '\n')"
+          MICROSERVICE_VERSION="$(mvn -s microservices/settings.xml -Dmaven.wagon.http.ssl.insecure=true -Dmaven.wagon.http.ssl.allowall=true -Dmaven.wagon.http.ssl.ignore.validity.dates=true -f microservices/${MICROSERVICES_LIST_LOCAL}/pom.xml help:evaluate -Dexpression=project.version -q -DforceStdout)"
           MICROSERVICE_VERSION_EXIT_CODE="$?"
           if [ "${MICROSERVICE_VERSION_EXIT_CODE}" != 0 ] ; then
             exit "${MICROSERVICE_VERSION_EXIT_CODE}"
@@ -136,6 +150,13 @@ spec:
 
     - name: ent
       image: $(params.ENT_IMAGE)
+      resources:
+        limits:
+          cpu: '1'
+          memory: 2Gi
+        requests:
+          cpu: 200m
+          memory: 200Mi
       workingDir: $(workspaces.source.path)/$(params.CONTEXT_DIR)
       script: |
         #!/usr/bin/env bash
