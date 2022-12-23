@@ -166,7 +166,7 @@ spec:
         - name: SCRIPT
           value: |
             ent config --default --set ENTANDO_NAMESPACE $(params.NAMESPACE)
-            ent bundle generate-cr -i $(params.DOCKER_REGISTRY)/$(params.DOCKER_ORG)/$(tasks.generate-manifests.results.bundleName) | kubectl apply -f -
+            ent bundle generate-cr -i $(params.DOCKER_REGISTRY)/$(params.DOCKER_ORG)/$(tasks.generate-manifests.results.bundleName) | kubectl -n $(params.NAMESPACE) apply -f -
             ent appname $(params.ENTANDO_APP_NAME) 
             ent config --default --set ENTANDO_CLI_DEFAULT_DOCKER_REGISTRY $(params.DOCKER_REGISTRY) 
             ent bundle install --conflict-strategy OVERRIDE
@@ -194,7 +194,7 @@ spec:
         - name: SCRIPT
           value: |
             ent config --default --set ENTANDO_NAMESPACE $(params.NAMESPACE)
-            ent bundle generate-cr -i $(params.DOCKER_REGISTRY)/$(params.DOCKER_ORG)/$(tasks.generate-manifests.results.bundleName) | kubectl apply -f -
+            ent bundle generate-cr -i $(params.DOCKER_REGISTRY)/$(params.DOCKER_ORG)/$(tasks.generate-manifests.results.bundleName) | kubectl -n $(params.NAMESPACE) apply -f -
             ent appname $(params.ENTANDO_APP_NAME) 
             ent config --default --set ENTANDO_CLI_DEFAULT_DOCKER_REGISTRY $(params.DOCKER_REGISTRY) 
             ent bundle install --conflict-strategy OVERRIDE
