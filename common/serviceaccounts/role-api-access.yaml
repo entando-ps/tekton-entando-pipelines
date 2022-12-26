@@ -20,4 +20,6 @@ rules:
       - entandodebundles
       - securitycontextconstraints
       - ingresses
+      - namespaces
+      - secrets
     verbs: ["get", "list", "watch", "create", "update", "patch"]
