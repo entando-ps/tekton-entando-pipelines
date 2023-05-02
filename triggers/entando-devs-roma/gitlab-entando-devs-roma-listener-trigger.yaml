@@ -1,0 +1,59 @@
+apiVersion: triggers.tekton.dev/v1beta1
+kind: Trigger
+metadata:
+  name: gitlab-entando-devs-roma-listener-trigger
+spec:
+  interceptors:
+    - name: "verify-gitlab-payload"
+      ref:
+        name: "gitlab"
+        kind: ClusterInterceptor
+      params:
+        - name: secretRef
+          value:
+            secretName: gitlab-entando-devs-roma-webhook-secret
+            secretKey: secretToken
+        - name: eventTypes
+          value:
+            - "Push Hook"
+  bindings:
+    - ref: binding
+  template:
+    spec:
+      params:
+        - name: gitrevision
+        - name: gitrepositoryurl
+      resourcetemplates:
+        - apiVersion: tekton.dev/v1beta1
+          kind: PipelineRun
+          metadata:
+            generateName: entando-devs-roma-
+          spec:
+            serviceAccountName: build-bot
+            pipelineRef:
+              name: entando-dependency
+            params:
+              - name: repo-url
+                value: ssh://git@rcdevopspp01.comune.roma.it:2222/entando/entando-devs-roma.git
+              - name: subdir-path
+                value: ""
+              - name: branch-name
+                value: preprod
+              - name: clean-workspace
+                value: "true"
+            workspaces:
+              - name: local-maven-repo
+                persistentVolumeClaim:
+                  claimName: maven-repo-pvc
+              - name: shared-workspace
+                volumeClaimTemplate:
+                  spec:
+                    accessModes:
+                      - ReadWriteMany
+                    resources:
+                      requests:
+                        storage: 100Mi
+              - name: ssh-creds
+                secret:
+                  secretName: ssh-key
+

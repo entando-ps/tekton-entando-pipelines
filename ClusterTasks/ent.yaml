@@ -1,0 +1,170 @@
+apiVersion: tekton.dev/v1beta1
+kind: ClusterTask
+metadata:
+  name: ent
+spec:
+  description: >-
+    This Task will install an Entando bundle in the targer cluster's namespace. By installing we mean that the 
+    Entando bundle will show up in the Hub catalog.
+  workspaces:
+    - name: ssh-directory
+      optional: true
+      description: |
+        A .ssh directory with a private key, known_hosts, config, etc. Copied to the user's home before git commands
+        are executed. Used to authenticate with the git remote when performing the clone. Binding a Secret to this 
+        Workspace is strongly recommended over other volume types.
+    - name: source
+  params:
+    - name: ENT_IMAGE
+      type: string
+      description: The image providing the ent binary that this Task runs.
+      default: registry.hub.docker.com/entando/ent:7.1.3_ocp-4.12_k8s_1.25
+    - name: NAMESPACE
+      type: string
+      description: The namespace of the cluster where the bundle should be installed.
+      default: "entando"
+    - name: DOCKER_ORG
+      type: string
+      description: The name of your docker organization
+      default: "foo"
+    - name: CONTEXT_DIR
+      type: string
+      description: >-
+        The context directory within the source workspace where we want to execute ent goals.
+      default: "./"
+    - name: SCRIPT
+      description: The ent cli script to run
+      type: string
+      default: ""
+    - name: ARGS
+      description: The ent cli arguments to run
+      type: array
+      default:
+        - ""
+  results:
+    - name: bundleName
+      description: The name of the bundle
+    - name: bundleVersion
+      description: The bundle version
+    - name: microservicesList
+      description: The list of microservices to build
+    - name: microservicesNumber
+      description: The number of microservices to build
+    - name: microserviceVersion
+      description: >-
+        The microservice version, retrieved by parsing the pom.xml. 
+        TODO change to parse multiple technology stacks.
+  steps:
+    - name: generate-manifests
+      image: $(params.ENT_IMAGE)
+      resources:
+        limits:
+          cpu: '1'
+          memory: 2Gi
+        requests:
+          cpu: 200m
+          memory: 200Mi
+      workingDir: $(workspaces.source.path)/$(params.CONTEXT_DIR)
+      command: ["/bin/bash"]
+      args: ["-c", "ent bundle pack --org=$(params.DOCKER_ORG) --stdout"]
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+    - name: get-artifacts-and-data
+      image: $(params.ENT_IMAGE)
+      workingDir: $(workspaces.source.path)/$(params.CONTEXT_DIR)
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+      script: |
+        #!/usr/bin/env bash
+        set -eux
+        
+        BUNDLE_NAME="$(jq -r '.name' entando.json)"
+        BUNDLE_NAME_EXIT_CODE="$?"
+        if [ "${BUNDLE_NAME_EXIT_CODE}" != 0 ] ; then
+          exit "${BUNDLE_NAME_EXIT_CODE}"
+        fi
+        printf "%s" "${BUNDLE_NAME}" > "$(results.bundleName.path)"
+
+        BUNDLE_VERSION="$(jq -r '.version' entando.json)"
+        BUNDLE_VERSION_EXIT_CODE="$?"
+        if [ "${BUNDLE_VERSION_EXIT_CODE}" != 0 ] ; then
+          exit "${BUNDLE_VERSION_EXIT_CODE}"
+        fi
+        printf "%s" "${BUNDLE_VERSION}" > "$(results.bundleVersion.path)"
+
+        MICROSERVICES_LIST="$(jq -r '.microservices[] | .name' entando.json | tr -d '\n')"
+
+        MICROSERVICES_LIST_EXIT_CODE="$?"
+        if [ "${MICROSERVICES_LIST_EXIT_CODE}" != 0 ] ; then
+          exit "${MICROSERVICES_LIST_EXIT_CODE}"
+        fi
+        printf "%s" "${MICROSERVICES_LIST}" > "$(results.microservicesList.path)"
+
+        MICROSERVICES_NUMBER="$(jq '.microservices | length' entando.json)"
+
+        if [ "${MICROSERVICES_NUMBER}" -gt 1 ]; then
+          MICROSERVICES_LIST="$(jq -r '.microservices[] | .name' entando.json | tr '\n' ' ')"
+          printf "%s" "${MICROSERVICES_LIST}" > "$(results.microservicesList.path)"
+        fi
+
+        MICROSERVICES_NUMBER_EXIT_CODE="$?"
+        if [ "${MICROSERVICES_NUMBER_EXIT_CODE}" != 0 ] ; then
+          exit "${MICROSERVICES_NUMBER_EXIT_CODE}"
+        fi
+        printf "%s" "${MICROSERVICES_NUMBER}" > "$(results.microservicesNumber.path)"
+        
+        if [ "${MICROSERVICES_NUMBER}" -gt 1 ]; then
+          for ms in ${MICROSERVICES_LIST} ; do
+            MICROSERVICE_VERSION="$(mvn -s microservices/settings.xml -Dmaven.wagon.http.ssl.insecure=true -Dmaven.wagon.http.ssl.allowall=true -Dmaven.wagon.http.ssl.ignore.validity.dates=true -f microservices/${ms}/pom.xml help:evaluate -Dexpression=project.version -q -DforceStdout)"
+            MICROSERVICE_VERSION_EXIT_CODE="$?"
+            if [ "${MICROSERVICE_VERSION_EXIT_CODE}" != 0 ] ; then
+              exit "${MICROSERVICE_VERSION_EXIT_CODE}"
+            fi
+            printf "%s" "${MICROSERVICE_VERSION}" > Ms-"${ms}"-Version ;
+          done
+          printf "%s" "${MICROSERVICE_VERSION}" > "$(results.microserviceVersion.path)"
+        else
+          MICROSERVICES_LIST_LOCAL="$(jq -r '.microservices[] | .name' entando.json | tr -d '\n')"
+          MICROSERVICE_VERSION="$(mvn -f microservices/${MICROSERVICES_LIST_LOCAL}/pom.xml help:evaluate -Dexpression=project.version -q -DforceStdout)"
+          MICROSERVICE_VERSION_EXIT_CODE="$?"
+          if [ "${MICROSERVICE_VERSION_EXIT_CODE}" != 0 ] ; then
+            exit "${MICROSERVICE_VERSION_EXIT_CODE}"
+          fi
+          printf "%s" "${MICROSERVICE_VERSION}" > "$(results.microserviceVersion.path)"
+        fi
+        
+        echo "bundle name: `cat $(results.bundleName.path)`"
+        echo "bundle version: `cat $(results.bundleVersion.path)`"
+        echo "number of microservices to build: `cat $(results.microservicesNumber.path)`"
+        if [ "$MICROSERVICES_NUMBER" -gt 1 ] ; then
+          for ms in ${MICROSERVICES_LIST}; do
+            echo "microservice name: ${ms}"
+            echo "microservice ${ms} version: `cat Ms-${ms}-Version`";
+          done
+        else
+          echo "microservice name: `cat $(results.microservicesList.path)`"
+          echo "microservice version: `cat $(results.microserviceVersion.path)`"
+        fi
+
+    - name: ent
+      image: $(params.ENT_IMAGE)
+      resources:
+        limits:
+          cpu: '1'
+          memory: 2Gi
+        requests:
+          cpu: 200m
+          memory: 200Mi
+      workingDir: $(workspaces.source.path)/$(params.CONTEXT_DIR)
+      script: |
+        #!/usr/bin/env bash
+
+        $(params.SCRIPT)
+
+      args:
+        - "$(params.ARGS)"
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000

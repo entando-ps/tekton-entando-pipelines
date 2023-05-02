@@ -1,0 +1,103 @@
+apiVersion: tekton.dev/v1beta1
+kind: Pipeline
+metadata:
+  name: deploy-project
+spec:
+  params:
+    - name: repo-url
+      type: string
+      description: The git repository URL to clone from.
+    - name: branch-name
+      type: string
+      default: customizzazioni-7.0.0
+      description: The git branch to clone.
+    - name: subdir-path
+      type: string
+      description: The git repository sub-dir to clone from.
+    - name: clean-workspace
+      type: string
+      description: Clean the workspace before cloning.
+    - name: deployment-name
+      type: string
+      description: The name of the de-app deployment.
+    - name: IMAGE
+      description: The fully qualified image name to build
+      default: rcdevopspp01.comune.roma.it/pre-prod/entando-de-app-wildfly:$(tasks.fetch-source.results.commit)
+    - name: DOCKERFILE
+      description: The path of the Dockerfile.
+      default: ./Dockerfile.wildfly
+    - name: BUILD_EXTRA_ARGS
+      description: Extra params for the docker image build process.
+      default: ""
+    - name: TLSVERIFY
+      description: Verify the TLS on the registry endpoint (for pull/push to a non TLS registry)
+      default: "false"
+  tasks:
+    - name: fetch-source
+      params:
+        - name: url
+          value: $(params.repo-url)
+        - name: revision
+          value: $(params.branch-name)
+        - name: subdirectory
+          value: $(params.subdir-path)
+        - name: deleteExisting
+          value: $(params.clean-workspace)
+      taskRef:
+        kind: Task
+        name: git-clone
+      workspaces:
+        - name: output
+          workspace: shared-workspace
+        - name: ssh-directory
+          workspace: ssh-creds
+    - name: build-war
+      params:
+        - name: GOALS
+          value: ["clean", "package", "-DskipTests", "-Dlicense.skipDownloadLicenses"]
+      runAfter:
+        - fetch-source
+      taskRef:
+        kind: ClusterTask
+        name: mvn
+      workspaces:
+        - name: maven-repo
+          workspace: local-maven-repo
+        - name: source
+          workspace: shared-workspace
+    - name: build-docker-image
+      params:
+        - name: IMAGE
+          value: $(params.IMAGE)
+        - name: DOCKERFILE
+          value: $(params.DOCKERFILE)
+        - name: BUILD_EXTRA_ARGS
+          value: $(params.BUILD_EXTRA_ARGS)
+        - name: TLSVERIFY
+          value: $(params.TLSVERIFY)
+      runAfter:
+        - build-war
+      taskRef:
+        kind: ClusterTask
+        name: buildah-single
+      workspaces:
+        - name: source
+          workspace: shared-workspace
+    - name: update-image
+      params:
+        - name: args
+          value:
+            - set
+            - image
+            - deployment/$(params.deployment-name)
+            - server-container=rcdevopspp01.comune.roma.it/pre-prod/entando-de-app-wildfly:$(tasks.fetch-source.results.commit)
+      runAfter:
+        - build-docker-image
+      taskRef:
+        kind: ClusterTask
+        name: kubernetes-actions
+  workspaces:
+    - name: shared-workspace
+    - name: local-maven-repo
+    - name: ssh-creds
+

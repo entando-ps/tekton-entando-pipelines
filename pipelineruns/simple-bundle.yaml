@@ -1,0 +1,49 @@
+apiVersion: tekton.dev/v1beta1
+kind: PipelineRun
+metadata:
+  generateName: simple-bundle-
+spec:
+  serviceAccountName: build-bot
+  pipelineRef:
+    name: ent-bundle-project
+#  podTemplate:
+#    securityContext:
+#      runAsNonRoot: true
+#      runAsUser: 65532
+#      fsGroup: 65532
+  params:
+    - name: ENTANDO_APP_NAME
+      value: "crc"
+    - name: REPO_URL
+      value: git@github.com:entando/entando-simple-ms-bundle.git
+    - name: SUBDIR_PATH
+      value: ""
+    - name: BRANCH_NAME
+      value: master
+    - name: CLEAN_WORKSPACE
+      value: "true"
+    - name: TLSVERIFY
+      value: "false"
+    - name: CONTEXT_DIR
+      value: ""
+    - name: DOCKER_ORG
+      value: ""
+    - name: DOCKER_REGISTRY
+      value: "registry.hub.docker.com"
+    - name: NAMESPACE
+      value: "entando"
+  workspaces:
+    - name: shared-workspace
+      volumeClaimTemplate:
+        spec:
+          accessModes:
+            - ReadWriteOnce
+          resources:
+            requests:
+              storage: 1Gi
+    - name: local-maven-repo
+      persistentVolumeClaim:
+        claimName: maven-repo-pvc
+    - name: ssh-creds
+      secret:
+        secretName: ssh-key

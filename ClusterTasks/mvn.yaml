@@ -1,0 +1,48 @@
+apiVersion: tekton.dev/v1beta1
+kind: ClusterTask
+metadata:
+  name: mvn
+spec:
+  workspaces:
+    - name: maven-repo
+    - name: source
+  params:
+    - name: MAVEN_IMAGE
+      type: string
+      description: Maven base image
+      default: docker.io/maven:3-openjdk-11-slim
+    - name: GOALS
+      description: The Maven goal to run
+      type: array
+      default: ["clean", "package", "-DskipTests"]
+    - name: CONTEXT_DIR
+      type: string
+      description: >-
+        The context directory within the repository for sources on wich we want to execute
+        maven goals.
+      default: "."
+  results:
+    - name: version
+      description: The project version extracted from the commit
+  steps:
+    - name: mvn
+      image: $(params.MAVEN_IMAGE)
+      workingDir: $(workspaces.source.path)/$(params.CONTEXT_DIR)
+      command:
+        - /usr/bin/mvn
+      args:
+        - -Dmaven.repo.local=$(workspaces.maven-repo.path)
+        - "$(params.GOALS)"
+    - name: get-project-version
+      image: $(params.MAVEN_IMAGE)
+      workingDir: $(workspaces.source.path)/$(params.CONTEXT_DIR)
+      script: |
+        #!/usr/bin/env bash
+        set -eu
+        
+        VERSION="$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)"
+        EXIT_CODE="$?"
+        if [ "${EXIT_CODE}" != 0 ] ; then
+          exit "${EXIT_CODE}"
+        fi
+        printf "%s" "${VERSION}" > "$(results.version.path)"

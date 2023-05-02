@@ -1,0 +1,46 @@
+apiVersion: tekton.dev/v1beta1
+kind: PipelineRun
+metadata:
+  generateName: buildah-custom-entando-de-app-
+spec:
+  timeouts:
+    pipeline: "2h0m0s"
+    tasks: "0h50m0s"
+  serviceAccountName: build-bot
+  pipelineRef:
+    name: deploy-project
+  podTemplate:
+    securityContext:
+      fsGroup: 65532
+  params:
+    - name: repo-url
+      value: ssh://git@rcdevopspp01.comune.roma.it:2222/entando/entando-de-app-7-1-roma.git
+    - name: subdir-path
+      value: ""
+    - name: branch-name
+      value: preprod
+    - name: clean-workspace
+      value: "true"
+    - name: deployment-name
+      value: preprod-deployment
+    - name: DOCKERFILE
+      value: ./Dockerfile.wildfly
+    - name: BUILD_EXTRA_ARGS
+      value: ""
+    - name: TLSVERIFY
+      value: "false"
+  workspaces:
+    - name: shared-workspace
+      volumeClaimTemplate:
+        spec:
+          accessModes:
+          - ReadWriteOnce
+          resources:
+            requests:
+              storage: 100Mi
+    - name: local-maven-repo
+      persistentVolumeClaim:
+        claimName: maven-repo-pvc
+    - name: ssh-creds
+      secret:
+        secretName: ssh-key

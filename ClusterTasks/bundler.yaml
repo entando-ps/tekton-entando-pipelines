@@ -1,0 +1,76 @@
+apiVersion: tekton.dev/v1beta1
+kind: ClusterTask
+metadata:
+  name: bundler
+spec:
+  description: >-
+    This Task will install an Entando bundle in the targer cluster's namespace. By installing we mean that the 
+    entando bundle will show up in the catalog.
+  workspaces:
+    - name: ssh-directory
+      optional: true
+      description: |
+        A .ssh directory with a private key, known_hosts, config, etc. Copied to the user's home before git commands
+        are executed. Used to authenticate with the git remote when performing the clone. Binding a Secret to this 
+        Workspace is strongly recommended over other volume types.
+  params:
+    - name: bundlerImage
+      type: string
+      description: The image providing the bundler binary that this Task runs.
+      default: docker.io/entando/bundler:632
+    - name: vcsServer
+      description: |
+        The 2nd domain name of the VCS server to point to for SSH authentication. Default values are:
+        - github.com
+        - gitlab.com
+        - bitbucket.org
+      type: string
+      default: "gitlab.com"
+    - name: gitRepository
+      type: string
+      description: The git repository URI in the SSH format.
+      default: "git@gitlab.com:[user]/[project].git"
+    - name: namespace
+      type: string
+      description: The namespace of the cluster where the bundle should be installed.
+      default: "entando"
+    - name: bundleName
+      type: string
+      description: The name of the bundle.
+      default: "my-bundle-name"
+    - name: dryRun
+      type: string
+      description: If you want to see the generated YAML set the value of this parameter to --dry-run.
+  results:
+    - name: manifest
+      description: The manifest of the bundle to be deployed to K8S
+  steps:
+    - name: bundler
+      env:
+        - name: NODE_DEBUG
+          value: "cluster,net,http,fs,tls,module,timers"
+      image: $(params.bundlerImage)
+      workingDir: /home/node/app
+#      command:
+#        - "echo"
+#      args:
+#        - "generating the bundle's manifest..."
+#        - ./bin/index.js
+#        - from-git
+#        - --repository=$(params.gitRepository)
+#        - --namespace=$(params.namespace)
+#        - --name=$(params.bundleName)
+#        - $(params.dryRun)
+#    - name: get-project-version
+#      image: $(params.MAVEN_IMAGE)
+#      workingDir: $(workspaces.source.path)/$(params.CONTEXT_DIR)
+      script: |
+        #!/usr/bin/env sh
+        set -eu
+        
+        MANIFEST="$(node ./bin/index.js from-git --dry-run --repository=$(params.gitRepository) --namespace=$(params.namespace) --name=$(params.bundleName) | tail -n +1)"
+        EXIT_CODE="$?"
+        if [ "${EXIT_CODE}" != 0 ]; then
+          exit "${EXIT_CODE}"
+        fi
+        printf "%s" "${MANIFEST}" > "$(results.manifest.path)"

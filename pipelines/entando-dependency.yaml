@@ -1,0 +1,66 @@
+apiVersion: tekton.dev/v1beta1
+kind: Pipeline
+metadata:
+  name: entando-dependency
+spec:
+  workspaces:
+    - name: local-maven-repo
+    - name: shared-workspace
+    - name: ssh-creds
+  params:
+    - name: repo-url
+      type: string
+      description: The git repository URL to clone from.
+    - name: branch-name
+      type: string
+      description: The git branch to clone.
+    - name: subdir-path
+      type: string
+      description: The git repository sub-dir to clone from.
+    - name: clean-workspace
+      type: string
+      description: Clean the workspace before cloning.
+  tasks:
+    - name: fetch-source
+      taskRef:
+        name: git-clone
+        kind: ClusterTask
+      workspaces:
+        - name: output
+          workspace: shared-workspace
+        - name : ssh-directory
+          workspace: ssh-creds
+      params:
+        - name: url
+          value: $(params.repo-url)
+        - name: revision
+          value: $(params.branch-name)
+        - name: subdirectory
+          value: $(params.subdir-path)
+        - name: deleteExisting
+          value: $(params.clean-workspace)
+    - name: build
+      runAfter:
+        - fetch-source
+      taskRef:
+        kind: ClusterTask
+        name: mvn
+      params:
+        - name: GOALS
+          value:
+            - -Dmaven.repo.local=$(workspaces.maven-repo.path)
+            - clean
+            - install
+            - -DskipTests
+      workspaces:
+        - name: source
+          workspace: shared-workspace
+        - name: maven-repo
+          workspace: local-maven-repo
+
+#  finally:
+#    - name: clean
+#      taskRef:
+#        kind: ClusterTask
+#        name: cleanup
+

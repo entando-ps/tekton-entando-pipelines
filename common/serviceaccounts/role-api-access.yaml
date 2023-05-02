@@ -1,0 +1,25 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: api-access
+rules:
+  - apiGroups:
+      - ""
+      - apps
+      - autoscaling
+      - extentions
+      - policy
+      - rbac.authorization.k8s.io
+      - entando.org
+      - security.openshift.io
+      - networking.k8s.io
+    resources:
+      - pods
+      - deployments
+      - services
+      - entandodebundles
+      - securitycontextconstraints
+      - ingresses
+      - namespaces
+      - secrets
+    verbs: ["get", "list", "watch", "create", "update", "patch"]

@@ -1,0 +1,71 @@
+apiVersion: triggers.tekton.dev/v1beta1
+kind: Trigger
+metadata:
+  name: entando-de-app-listener-trigger
+spec:
+  interceptors:
+    - name: "verify-gitlab-payload"
+      ref:
+        name: "gitlab"
+        kind: ClusterInterceptor
+      params:
+        - name: secretRef
+          value:
+            secretName: entando-de-app-webhook-secret
+            secretKey: secretToken
+        - name: eventTypes
+          value:
+            - "Push Hook"
+  bindings:
+    - ref: binding
+  template:
+    spec:
+      params:
+        - name: gitrevision
+        - name: gitrepositoryurl
+      resourcetemplates:
+        - apiVersion: tekton.dev/v1beta1
+          kind: PipelineRun
+          metadata:
+            generateName: buildah-custom-entando-de-app-
+          spec:
+            timeouts:
+              pipeline: "2h0m0s"
+              tasks: "0h50m0s"
+            serviceAccountName: build-bot
+            pipelineRef:
+              name: deploy-project
+            params:
+              - name: repo-url
+                value: ssh://git@rcdevopspp01.comune.roma.it:2222/entando/entando-de-app-7-1-roma.git
+              - name: subdir-path
+                value: ""
+              - name: branch-name
+                value: preprod
+              - name: clean-workspace
+                value: "true"
+              - name: deployment-name
+                value: preprod-deployment
+              - name: DOCKERFILE
+                value: ./Dockerfile.wildfly
+              - name: BUILD_EXTRA_ARGS
+                value: ""
+              - name: TLSVERIFY
+                value: "false"
+            workspaces:
+              - name: shared-workspace
+                volumeClaimTemplate:
+                  spec:
+                    accessModes:
+                      - ReadWriteOnce
+                    resources:
+                      requests:
+                        storage: 100Mi
+              - name: ssh-creds
+                secret:
+                  secretName: ssh-key
+              - name: local-maven-repo
+                persistentVolumeClaim:
+                  claimName: maven-repo-pvc
+
+

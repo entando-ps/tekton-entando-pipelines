@@ -1,0 +1,233 @@
+apiVersion: tekton.dev/v1beta1
+kind: Pipeline
+metadata:
+  name: ent-bundle-project
+spec:
+  params:
+    - name: ENTANDO_APP_NAME
+      type: string
+      description: The entando app name
+      default: "quickstart"
+    - name: REPO_URL
+      type: string
+      description: The git repository url of the Entando bundle
+    - name: BRANCH_NAME
+      type: string
+      description: The git branch name to pull from
+    - name: SUBDIR_PATH
+      type: string
+      description: The Subdirectory inside the `output` Workspace to clone the repo into.
+      default: "./"
+    - name: CLEAN_WORKSPACE
+      type: string
+      description: Clean out the contents of the destination directory if it already exists before cloning.
+      default: "true"
+    - name: DOCKERFILE
+      description: The path of the Dockerfile.
+      default: ./Dockerfile
+    - name: DOCKER_ORG
+      type: string
+      description: The name of your docker organization
+      default: "entando"
+    - name: DOCKER_REGISTRY
+      type: string
+      description: The name of the docker registry to use
+      default: "quay.io"
+    - name: TLSVERIFY
+      description: Verify the TLS on the registry endpoint (for pull/push to a non TLS registry)
+      default: "false"
+    - name: CONTEXT_DIR
+      description: The context directory within the source workspace where we want to execute ent goals.
+      default: "./"
+    - name: NAMESPACE
+      description: The K8s namespace where install the Entando bundle
+      default: entando
+  tasks:
+    - name: fetch-sources
+      params:
+        - name: url
+          value: $(params.REPO_URL)
+        - name: revision
+          value: $(params.BRANCH_NAME)
+        - name: subdirectory
+          value: $(params.SUBDIR_PATH)
+        - name: deleteExisting
+          value: $(params.CLEAN_WORKSPACE)
+      taskRef:
+        kind: ClusterTask
+        name: git-clone
+      workspaces:
+        - name: output
+          workspace: shared-workspace
+        - name: ssh-directory
+          workspace: ssh-creds
+    - name: generate-manifests
+      taskRef:
+        kind: ClusterTask
+        name: ent
+      params:
+        - name: NAMESPACE
+          value: $(params.NAMESPACE)
+        - name: DOCKER_ORG
+          value: $(params.DOCKER_ORG)
+        - name: CONTEXT_DIR
+          value: $(params.CONTEXT_DIR)
+      workspaces:
+        - name: source
+          workspace: shared-workspace
+      runAfter:
+        - fetch-sources
+    - name: build-bundle-image
+      taskRef:
+        kind: ClusterTask
+        name: buildah-single
+      params:
+      - name: IMAGE
+        value: $(params.DOCKER_REGISTRY)/$(params.DOCKER_ORG)/$(tasks.generate-manifests.results.bundleName):$(tasks.generate-manifests.results.bundleVersion)
+      - name: BUILDER_IMAGE
+        value: quay.io/buildah/stable:v1.18.0
+      - name: STORAGE_DRIVER
+        value: vfs
+      - name: DOCKERFILE
+        value: ./.entando/output/Dockerfile
+      - name: CONTEXT
+        value: "$(params.CONTEXT_DIR)"
+      - name: TLSVERIFY
+        value: "false"
+      - name: FORMAT
+        value: oci
+      workspaces:
+      - name: source
+        workspace: shared-workspace
+      runAfter:
+        - generate-manifests
+    - name: build-ms-image
+      when:
+        - input: $(tasks.generate-manifests.results.microservicesNumber)
+          operator: in
+          values:
+            - "1"
+      taskRef:
+        kind: ClusterTask
+        name: buildah-single
+      params:
+        - name: IMAGE
+          value: $(params.DOCKER_REGISTRY)/$(params.DOCKER_ORG)/$(tasks.generate-manifests.results.microservicesList):$(tasks.generate-manifests.results.microserviceVersion)
+        - name: BUILDER_IMAGE
+          value: quay.io/buildah/stable:v1.18.0
+        - name: STORAGE_DRIVER
+          value: vfs
+        - name: DOCKERFILE
+          value: "$(params.CONTEXT_DIR)/microservices/$(tasks.generate-manifests.results.microservicesList)/Dockerfile"
+        - name: CONTEXT
+          value: "$(params.CONTEXT_DIR)/microservices/$(tasks.generate-manifests.results.microservicesList)"
+        - name: TLSVERIFY
+          value: "false"
+        - name: FORMAT
+          value: oci
+      workspaces:
+        - name: source
+          workspace: shared-workspace
+      runAfter:
+        - build-bundle-image
+    - name: build-ms-images
+      when:
+          - input: $(tasks.generate-manifests.results.microservicesNumber)
+            operator: notin
+            values:
+                - "1"
+      taskRef:
+          kind: ClusterTask
+          name: buildah-multi
+      params:
+          - name: IMAGE
+            value: $(params.DOCKER_REGISTRY)/$(params.DOCKER_ORG)/
+          - name: BUILDER_IMAGE
+            value: quay.io/buildah/stable:v1.18.0
+          - name: STORAGE_DRIVER
+            value: vfs
+          - name: DOCKERFILE
+            value: ./Dockerfile
+          - name: CONTEXT
+            value: "$(params.CONTEXT_DIR)"
+          - name: TLSVERIFY
+            value: "false"
+          - name: FORMAT
+            value: oci
+          - name: ENTANDO_MS_TO_BUILD_LIST
+            value: "$(tasks.generate-manifests.results.microservicesList)"
+      workspaces:
+          - name: source
+            workspace: shared-workspace
+      runAfter:
+          - build-bundle-image
+    - name: deploy-and-install-single
+      when:
+        - input: $(tasks.generate-manifests.results.microservicesNumber)
+          operator: in
+          values:
+            - "1"
+      params:
+        - name: ENTANDO_APP_NAME
+          value: $(params.ENTANDO_APP_NAME)
+        - name: SCRIPT
+          value: |
+            ent config --default --set ENTANDO_NAMESPACE $(params.NAMESPACE)
+            ent bundle generate-cr -i $(params.DOCKER_REGISTRY)/$(params.DOCKER_ORG)/$(tasks.generate-manifests.results.bundleName) | kubectl -n $(params.NAMESPACE) apply -f -
+            ent appname $(params.ENTANDO_APP_NAME) 
+            ent config --default --set ENTANDO_CLI_DEFAULT_DOCKER_REGISTRY $(params.DOCKER_REGISTRY) --stdout
+            ent bundle install --conflict-strategy OVERRIDE --stdout
+        - name: ARGS
+          value:
+            - ""
+        - name: CONTEXT_DIR
+          value: $(params.CONTEXT_DIR)
+        - name: DOCKER_REGISTRY
+          value: $(params.DOCKER_REGISTRY)
+        - name: DOCKER_ORG
+          value: $(params.DOCKER_ORG)
+      workspaces:
+        - name: source
+          workspace: shared-workspace
+      runAfter:
+        - "build-ms-image"
+      taskRef:
+        kind: ClusterTask
+        name: ent-cli
+    - name: deploy-and-install-multi
+      when:
+        - input: $(tasks.generate-manifests.results.microservicesNumber)
+          operator: notin
+          values:
+            - "1"
+      params:
+        - name: ENTANDO_APP_NAME
+          value: $(params.ENTANDO_APP_NAME)
+        - name: SCRIPT
+          value: |
+            ent config --default --set ENTANDO_NAMESPACE $(params.NAMESPACE)
+            ent bundle generate-cr -i $(params.DOCKER_REGISTRY)/$(params.DOCKER_ORG)/$(tasks.generate-manifests.results.bundleName) | kubectl -n $(params.NAMESPACE) apply -f -
+            ent appname $(params.ENTANDO_APP_NAME) 
+            ent config --default --set ENTANDO_CLI_DEFAULT_DOCKER_REGISTRY $(params.DOCKER_REGISTRY) --stdout
+            ent bundle install --conflict-strategy OVERRIDE --stdout
+        - name: ARGS
+          value:
+            - ""
+        - name: CONTEXT_DIR
+          value: $(params.CONTEXT_DIR)
+        - name: DOCKER_REGISTRY
+          value: $(params.DOCKER_REGISTRY)
+        - name: DOCKER_ORG
+          value: $(params.DOCKER_ORG)
+      workspaces:
+        - name: source
+          workspace: shared-workspace
+      runAfter:
+        - "build-ms-images"
+      taskRef:
+        kind: ClusterTask
+        name: ent-cli
+  workspaces:
+    - name: shared-workspace
+    - name: local-maven-repo
+    - name: ssh-creds
