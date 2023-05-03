@@ -73,6 +73,7 @@ spec:
     - name: varlibcontainers
       mountPath: /var/lib/containers
     securityContext:
+      privileged: true
       capabilities:
         add:
           - SETFCAP

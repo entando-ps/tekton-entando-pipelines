@@ -52,10 +52,18 @@ spec:
               - name: DOCKER_REGISTRY
                 value: "quay.io"
             workspaces:
-              - name: source
-                persistentVolumeClaim:
-                  claimName: source-pvc
+              - name: shared-workspace
+                volumeClaimTemplate:
+                  spec:
+                    accessModes:
+                      - ReadWriteOnce
+                    resources:
+                      requests:
+                        storage: 1Gi
               - name: local-maven-repo
                 persistentVolumeClaim:
                   claimName: maven-repo-pvc
+              - name: ssh-creds
+                secret:
+                  secretName: ssh-key
 

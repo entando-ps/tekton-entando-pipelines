@@ -55,7 +55,7 @@ spec:
           value: $(params.CLEAN_WORKSPACE)
       taskRef:
         kind: ClusterTask
-        name: git-clone
+        name: git-clone-ent
       workspaces:
         - name: output
           workspace: shared-workspace

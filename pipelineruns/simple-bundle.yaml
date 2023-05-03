@@ -6,11 +6,9 @@ spec:
   serviceAccountName: build-bot
   pipelineRef:
     name: ent-bundle-project
-#  podTemplate:
-#    securityContext:
-#      runAsNonRoot: true
-#      runAsUser: 65532
-#      fsGroup: 65532
+  podTemplate:
+    securityContext:
+      fsGroup: 65532
   params:
     - name: ENTANDO_APP_NAME
       value: "crc"

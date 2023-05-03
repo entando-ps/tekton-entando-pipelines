@@ -65,7 +65,10 @@ spec:
   steps:
   - name: build
     securityContext:
-      runAsUser: 1000
+      privileged: true
+      capabilities:
+        add:
+          - SETFCAP
     image: $(params.BUILDER_IMAGE)
     workingDir: $(workspaces.source.path)
     script: |
@@ -80,7 +83,9 @@ spec:
       mountPath: /var/lib/containers
   - name: push
     securityContext:
-      runAsUser: 1000
+      capabilities:
+        add:
+          - SETFCAP
     image: $(params.BUILDER_IMAGE)
     workingDir: $(workspaces.source.path)
     script: |

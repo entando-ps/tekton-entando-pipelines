@@ -11,7 +11,7 @@ export CONTAINER_REGISTRY_PASSWORD='<your token>'
 
 2. **Create the required secret**
 ```bash
-oc create secret -n entando docker-registry container-registry-secret \
+kubectl create secret -n entando docker-registry container-registry-secret \
   --docker-server=$CONTAINER_REGISTRY_SERVER \
   --docker-username=$CONTAINER_REGISTRY_USER \
   --docker-password=$CONTAINER_REGISTRY_PASSWORD -o yaml > common/secrets/docker-registry.yaml
@@ -25,5 +25,5 @@ metadata:
   name: build-bot
 secrets:
   - name: ssh-key
-  - name: quay-registry-secret
+  - name: container-registry-secret
 ```

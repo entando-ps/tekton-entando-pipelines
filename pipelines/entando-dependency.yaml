@@ -23,7 +23,7 @@ spec:
   tasks:
     - name: fetch-source
       taskRef:
-        name: git-clone
+        name: git-clone-ent
         kind: ClusterTask
       workspaces:
         - name: output

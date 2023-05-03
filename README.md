@@ -22,28 +22,25 @@
 ### Required steps
 
 1. Clone this repository (https://github.com/entando-ps/tekton-entando-pipelines.git)
-2. checkout the branch `ocp-412`
+2. checkout the branch `k8s`
 3. Edit the `build-bot` secret, located at `./common/secrets` directory to match with your VCS's credentials
-4. Edit the `container-registry-secret`, located at `./common/secrets` directory to match with your docker registry's credentials
+4. Edit the `docker-registry`, located at `./common/secrets` directory to match with your docker registry's credentials
 5. Edit the `build-bot` service account, located at `./common/serviceaccounts` directory to match with your target namespace
 6. Edit the `role-api-access` role, located at `./common/serviceaccounts` directory to match with your target namespace
-7. Edit the `rolebinging-api-access` role-binding, located at `./common/serviceaccounts` directory to match with your target namespace 
+7. Edit the `rolebinding-api-access` role-binding, located at `./common/serviceaccounts` directory to match with your target namespace 
 8. Start applying all the Tekton resources:
 
 ```bash
-# Set the correct OCP project
-oc project [your target project]
-
 # Install ClusterTasks
-oc apply -f ClusterTasks/
+kubectl apply -f ClusterTasks/
 
 # Install all the resources in common/**/** path
 for r in common/**/*.yaml; do
-  oc apply -f $r;
+  kubectl apply -f $r;
 done
 
 # Install the entando-bundle pipeline
-oc apply -f pipelines/
+kubectl apply -f pipelines/
 ```
 
 ### Optional Steps
@@ -119,7 +116,7 @@ export CONTAINER_REGISTRY_PASSWORD='<your registry user password>'
 
 2. **Create the required secret**
 ```bash
-oc create secret -n [your namespace] docker-registry quay-registry-secret \
+kubectl create secret -n [your namespace] docker-registry quay-registry-secret \
   --docker-server=$CONTAINER_REGISTRY_SERVER \
   --docker-username=$CONTAINER_REGISTRY_USER \
   --docker-password=$CONTAINER_REGISTRY_PASSWORD
@@ -133,21 +130,5 @@ metadata:
   name: build-bot
 secrets:
   - name: ssh-key
-  - name: quay-registry-secret
-```
-
---- 
-
-### Security Context configuration for OCP
-
-Associate the custom `entando-scc` SCC with the `build-bot` service account
-
-```bash
-oc adm policy add-scc-to-user entando-scc -z build-bot
-```
-
-Associate the `privileged` SCC with the `build-bot` service account
-
-```bash
-oc adm policy add-scc-to-user privileged -z build-bot
+  - name: container-registry-secret
 ```
